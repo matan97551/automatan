@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>אבי - Automatan | פיילוט</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --bubble-user: #2b6cb0;
+    --bubble-bot: #ffffff;
+    --accent: #c73a63;
+    --text: #1a1a1a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    background: var(--accent);
+    color: white;
+    padding: 14px 16px;
+    text-align: center;
+    flex-shrink: 0;
+    padding-top: max(14px, env(safe-area-inset-top));
+  }
+  header h1 { margin: 0; font-size: 17px; }
+  header p { margin: 3px 0 0; font-size: 11px; opacity: 0.85; }
+  #intro { max-width: 640px; width: 100%; margin: 10px auto 0; padding: 0 12px; flex-shrink: 0; }
+  #intro .card {
+    background: #fff8ec;
+    border: 1px solid #eadfc4;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #555;
+  }
+  #intro .card b { color: var(--accent); }
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 640px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.5;
+    font-size: 15px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .msg a { color: inherit; text-decoration: underline; }
+  .user { align-self: flex-end; background: var(--bubble-user); color: white; border-bottom-left-radius: 4px; }
+  .bot { align-self: flex-start; background: var(--bubble-bot); border: 1px solid #e0dcd2; border-bottom-right-radius: 4px; }
+  .typing { align-self: flex-start; background: var(--bubble-bot); border: 1px solid #e0dcd2; padding: 10px 14px; border-radius: 14px; font-size: 13px; color: #888; }
+  #inputBar {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    background: white;
+    border-top: 1px solid #e0dcd2;
+    max-width: 640px;
+    width: 100%;
+    margin: 0 auto;
+    flex-shrink: 0;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  #inputBar input { flex: 1; padding: 12px 14px; border-radius: 20px; border: 1px solid #ccc; font-size: 16px; outline: none; min-width: 0; }
+  #inputBar input:focus { border-color: var(--accent); }
+  #inputBar button { background: var(--accent); color: white; border: none; border-radius: 20px; padding: 0 18px; font-size: 15px; cursor: pointer; flex-shrink: 0; }
+  #inputBar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #status { text-align: center; font-size: 11px; color: #999; padding: 2px 0; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>אבי · Automatan</h1>
+  <p>סביבת פיילוט לבדיקה - לא לשימוש לקוחות סופי</p>
+</header>
+<div id="intro">
+  <div class="card">
+    <b>מה זה?</b> אבי הוא עוזר דיגיטלי שממיין לידים של קונים ומוכרים לפני שהם מגיעים לסוכן.
+    <br>
+    <b>איך בודקים?</b> תכתוב הודעות כאילו אתה לקוח אמיתי (למשל "אני רוצה למכור דירה"), תענה על השאלות שהוא שואל, ותראה איך הוא מסכם ושולח לינק לקביעת פגישה.
+  </div>
+</div>
+<div id="chat"></div>
+<div id="status"></div>
+<div id="inputBar">
+  <input id="messageInput" type="text" placeholder="כתוב הודעה..." autocomplete="off">
+  <button id="sendBtn">שלח</button>
+</div>
+<script>
+  const WEBHOOK_URL = "https://hook.us2.make.com/arhux5tc190p3a7rekmy672a4phx3umu";
+  const sessionId = "pilot_" + Math.random().toString(36).slice(2) + "_" + Date.now();
+  let history = [];
+  const chatEl = document.getElementById("chat");
+  const inputEl = document.getElementById("messageInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const statusEl = document.getElementById("status");
+  function linkify(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+  }
+  function addBubble(role, text) {
+    const div = document.createElement("div");
+    div.className = "msg " + (role === "user" ? "user" : "bot");
+    div.innerHTML = linkify(text);
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+  function setTyping(on) {
+    let el = document.getElementById("typingIndicator");
+    if (on) {
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "typingIndicator";
+        el.className = "typing";
+        el.textContent = "אבי כותב...";
+        chatEl.appendChild(el);
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+    } else if (el) { el.remove(); }
+  }
+  function buildMessagePayload(newUserText) {
+    if (history.length === 0) return newUserText;
+    const transcript = history.map(h => (h.role === "user" ? "לקוח: " : "אבי: ") + h.text).join("\n");
+    return `[HISTORY]\n${transcript}\n[/HISTORY]\n${newUserText}`;
+  }
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    addBubble("user", text);
+    history.push({ role: "user", text });
+    inputEl.value = "";
+    sendBtn.disabled = true;
+    setTyping(true);
+    statusEl.textContent = "";
+    const payload = { message: buildMessagePayload(text), timestamp: new Date().toISOString(), session_id: sessionId };
+    try {
+      const res = await fetch(WEBHOOK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const replyText = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${replyText}`);
+      setTyping(false);
+      addBubble("bot", replyText || "(תגובה ריקה מהשרת)");
+      history.push({ role: "bot", text: replyText || "" });
+    } catch (err) {
+      setTyping(false);
+      statusEl.textContent = "שגיאה בתקשורת עם אבי: " + err.message;
+      console.error("Avi pilot error:", err);
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+  sendBtn.addEventListener("click", sendMessage);
+  inputEl.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+  addBubble("bot", "היי! כתוב הודעה כמו שלקוח היה כותב, ותראה איך אני מגיב.");
+</script>
+</body>
+</html>
